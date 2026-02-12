@@ -5,39 +5,54 @@ const axios = require('axios');
 const app = express();
 app.use(cors());
 
-// Utiliser le port donné par Render ou 3000 par défaut
 const PORT = process.env.PORT || 3000;
 
-// Route d'accueil pour vérifier que le site marche
 app.get('/', (req, res) => {
-    res.send('L\'API Free Fire fonctionne ! Utilise /check/UID pour tester.');
+    res.send('API Zeno FF est en ligne !');
 });
 
-// Route pour vérifier un UID
 app.get('/check/:uid', async (req, res) => {
     const uid = req.params.uid;
-    
-    // API Externe (Change ce lien si elle ne marche plus)
-    const apiURL = `https://free-ff-api-src-5plp.onrender.com/api/get?region=all&uid=${uid}`;
-    
-    console.log(`Checking UID: ${uid}`);
+    console.log(`Recherche UID: ${uid}`);
+
+    // --- NOUVEAU FOURNISSEUR ---
+    // On utilise une autre source
+    const apiURL = `https://ff-api-checker.vercel.app/api/validate/${uid}`;
 
     try {
-        const response = await axios.get(apiURL);
+        // On met un temps limite de 5 secondes pour ne pas attendre indéfiniment
+        const response = await axios.get(apiURL, { timeout: 5000 });
         
-        if (response.data && response.data.nickname) {
+        console.log("Réponse reçue:", response.data);
+
+        // Cette nouvelle API renvoie souvent { success: true, data: { nickname: "..." } }
+        if (response.data && response.data.success && response.data.data) {
             res.json({
                 success: true,
                 uid: uid,
-                nickname: response.data.nickname,
-                region: response.data.region
+                nickname: response.data.data.nickname,
+                region: response.data.data.region || "Inconnue"
             });
-        } else {
-            res.json({ success: false, message: "UID invalide ou introuvable" });
+        } 
+        // Parfois elle renvoie directement le nickname sans "data"
+        else if (response.data && response.data.nickname) {
+             res.json({
+                success: true,
+                uid: uid,
+                nickname: response.data.nickname,
+                region: response.data.region || "Inconnue"
+            });
+        }
+        else {
+            res.json({ success: false, message: "Joueur introuvable" });
         }
 
     } catch (error) {
-        res.status(500).json({ success: false, message: "Erreur de l'API externe" });
+        console.error("Erreur:", error.message);
+        res.status(500).json({ 
+            success: false, 
+            message: "Le fournisseur ne répond pas. Réessaie." 
+        });
     }
 });
 
